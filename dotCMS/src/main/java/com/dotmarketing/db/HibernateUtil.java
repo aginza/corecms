@@ -771,10 +771,10 @@ public class HibernateUtil {
 		commitListeners.get().clear();
 		
 		Set<String> reindexInodes= new HashSet<String>();
-		List<Contentlet> contentToIndex = new ArrayList<Contentlet>();
+		List<String> contentToIndex = new ArrayList<String>();
 		
 		
-		List<List<Contentlet>> listOfLists = new ArrayList<List<Contentlet>>();
+		List<List<String>> listOfLists = new ArrayList<List<String>>();
 		int batchSize = Config.getIntProperty("INDEX_COMMIT_LISTENER_BATCH_SIZE", 50);
 		
 		
@@ -785,14 +785,14 @@ public class HibernateUtil {
 					rrunner.run();
 					continue;
 				}
-				List<Contentlet> cons  	=  rrunner.getReindexIds();
-				for(Contentlet con : cons){
-					if(!reindexInodes.contains(con.getInode())){
-						reindexInodes.add(con.getInode());
+				List<String> cons  	=  rrunner.getReindexIds();
+				for(String con : cons){
+					if(!reindexInodes.contains(con)){
+						reindexInodes.add(con);
 						contentToIndex.add(con);
 						if(contentToIndex.size() == batchSize){
 							listOfLists.add(contentToIndex);
-							contentToIndex = new ArrayList<Contentlet>();
+							contentToIndex = new ArrayList<String>();
 						}
 					}
 				}
@@ -802,9 +802,9 @@ public class HibernateUtil {
 		}
 		listOfLists.add(contentToIndex);
 		
-		for(List<Contentlet> batchList : listOfLists){
+		for(List<String> batchList : listOfLists){
 			
-			new ReindexRunnable(batchList, ReindexRunnable.Action.ADDING, null, false) {}.run();
+			new ReindexRunnable(batchList, ReindexRunnable.Action.ADDING, null, false, false) {}.run();
 		}
 		
 

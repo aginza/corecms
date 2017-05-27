@@ -9,8 +9,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import com.dotcms.content.business.DotMappingException;
 import com.dotcms.content.elasticsearch.business.IndiciesAPI.IndiciesInfo;
@@ -274,6 +277,9 @@ public class ESContentletIndexAPI implements ContentletIndexAPI{
 
 	public void addContentToIndex(final Contentlet content) throws DotHibernateException {
 	    addContentToIndex(content, true);
+	    
+	    ReindexRunnable indexAction=new ReindexRunnable(content.getIdentifier(), ReindexRunnable.Action.ADDING){ };
+	    HibernateUtil.addRollbackListener(indexAction);
 	}
 
 	public void addContentToIndex(final Contentlet content, final boolean deps) throws DotHibernateException {
@@ -314,35 +320,71 @@ public class ESContentletIndexAPI implements ContentletIndexAPI{
 	    else {
             // add a commit listener to index the contentlet if the entire
             // transaction finish clean
-            HibernateUtil.addCommitListener(content.getInode()+ ReindexRunnable.Action.ADDING,indexAction);
+            HibernateUtil.addCommitListener(content.getIdentifier()+ ReindexRunnable.Action.ADDING,indexAction);
 	    }	    
 	}
-
-	@Override
-	public void indexContentList(List<Contentlet> contentToIndex, BulkRequestBuilder bulk, boolean reindexOnly) throws  DotDataException{
-    	if(contentToIndex==null || contentToIndex.size()==0){
-    		return;
-    	}
+	
+    @Override
+    public void indexContentIds(List<String> conIds, BulkRequestBuilder bulk, boolean reindexOnly) throws  DotDataException{
+        if(conIds==null || conIds.size()==0){
+            return;
+        }
         Client client=new ESClient().getClient();
         BulkRequestBuilder req = (bulk==null) ? client.prepareBulk() : bulk;
         try {
-			indexContentletList(req, contentToIndex, reindexOnly);
-			if(bulk==null && req.numberOfActions()>0){
-				req.execute().actionGet();
-			}
-		} catch (DotStateException | DotSecurityException | DotMappingException e) {
-			throw new DotDataException (e.getMessage(), e);
-		}
+          indexContentletList(req, conIds, reindexOnly);
+            if(bulk==null && req.numberOfActions()>0){
+                req.execute().actionGet();
+            }
+        } catch (DotStateException | DotSecurityException | DotMappingException e) {
+            throw new DotDataException (e.getMessage(), e);
+        }
+    }
+    
+	@Override
+	public void indexContentList(List<Contentlet> contentToIndex, BulkRequestBuilder bulk, boolean reindexOnly) throws  DotDataException{
+      List<String> idsToIndex =contentToIndex.stream()
+          .map(Contentlet::getIdentifier)
+          .collect(Collectors.toList());
+      indexContentIds(idsToIndex, bulk, reindexOnly);
+
 	}
 
-	private void indexContentletList(BulkRequestBuilder req, List<Contentlet> contentToIndex, boolean reindexOnly) throws DotStateException, DotDataException, DotSecurityException, DotMappingException {
+	private void indexContentletList(BulkRequestBuilder req, List<String> contentToIndex, boolean reindexOnly) throws DotStateException, DotDataException, DotSecurityException, DotMappingException {
 
-		if ( contentToIndex != null && !contentToIndex.isEmpty() ) {
-			Logger.debug(this.getClass(), "Indexing " + contentToIndex.size() +
-					" contents, starting with identifier [ " + contentToIndex.get(0).getMap().get("identifier") + "]");
-		}
+	    Set<String> contentIdentifiers = new HashSet(contentToIndex);
+		for(String myId : contentIdentifiers) {
 
-		for(Contentlet con : contentToIndex) {
+		  // load up all the langs, working and live
+		  List<Map<String,Object>> results =  new DotConnect()
+		      .setSQL("select working_inode, live_inode from contentlet_version_info where identifier=?")
+		      .addParam(myId)
+		      .loadObjectResults();
+		  
+		  
+		  // build our set of inodes to index
+		  Set<String> inodes = new HashSet<>();
+		  for(Map<String,Object> row : results){
+		    inodes.add((String) row.get("working_inode"));
+		    inodes.add((String) row.get("live_inode"));
+		  }
+		  
+		  // build our contentlets to index
+		  List<Contentlet> cons = new ArrayList<>();
+		  for(String inode : inodes){
+		    if(!UtilMethods.isSet(inode)) continue;
+		    try{
+		      cons.add(APILocator.getContentletAPI().find(inode, APILocator.systemUser(), false) );
+		    }
+		    catch(Exception e){
+		      Logger.warn(this.getClass(), "Unable to load contentlet.id:" +myId + " contentlet.inode:" + inode + " for reindexing");
+		      Logger.warn(this.getClass(), e.getMessage());
+		      Logger.debug(this.getClass(), e.getMessage(), e);
+		    }
+		  }
+		  
+		  
+		  for(Contentlet con : cons){
             String id=con.getIdentifier()+"_"+con.getLanguageId();
             IndiciesInfo info=APILocator.getIndiciesAPI().loadIndicies();
             Gson gson=new Gson();
@@ -375,6 +417,7 @@ public class ESContentletIndexAPI implements ContentletIndexAPI{
 				Logger.error(this, "Can't get a mapping for contentlet with id_lang:" + id + " Content data: " + con.getMap(), ex);
 				throw ex;
             }
+          }
         }
 		
 	}
@@ -444,7 +487,15 @@ public class ESContentletIndexAPI implements ContentletIndexAPI{
 	        	                    q = "+type:content +" + rel.getRelationTypeValue() + ":" + content.getIdentifier();
 
 	        	                List<Contentlet> related = APILocator.getContentletAPI().search(q, -1, 0, null, APILocator.getUserAPI().getSystemUser(), false);
-	        	                indexContentletList(bulk, related, false);
+	        	                
+	        	                List<String> indexMe =  related.stream()
+	        	                    .map(Contentlet::getIdentifier)
+	        	                    .collect(Collectors.toList());
+	        	                
+	        	                
+	        	                
+	        	                
+	        	                indexContentletList(bulk, indexMe, false);
 	        	            }
 
 	        	            bulk.add(client.prepareDelete(info.working, "content", id));

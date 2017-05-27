@@ -1199,11 +1199,9 @@ public class ESIndexAPI {
 			if (cleanUp) {
 				File toDelete = new File(Config.getStringProperty(REPOSITORY_PATH,
 						ConfigUtils.getBackupPath() + File.separator + "backup_repo"));
-				try {
-					FileUtil.deleteDir(toDelete.getAbsolutePath());
-				} catch (IOException e) {
-					Logger.error(this.getClass(), "The files on " + toDelete.getAbsolutePath() + " were not deleted.");
-				}
+		
+				com.liferay.util.FileUtil.deltree(toDelete.getAbsolutePath());
+	
 			} else {
 				Logger.warn(this.getClass(), "No files were deleted");
 			}

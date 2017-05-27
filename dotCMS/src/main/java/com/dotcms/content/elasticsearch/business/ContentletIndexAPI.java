@@ -100,4 +100,6 @@ public interface ContentletIndexAPI {
 
 	void indexContentList(List<Contentlet> contentToIndex, BulkRequestBuilder bulk, boolean reindexOnly) throws DotDataException;
 
+  void indexContentIds(List<String> conIds, BulkRequestBuilder bulk, boolean reindexOnly) throws DotDataException;
+
 }
