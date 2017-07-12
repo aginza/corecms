@@ -14,6 +14,8 @@ import com.dotmarketing.exception.DotSecurityException;
 import com.dotmarketing.portlets.contentlet.business.ContentletAPI;
 import com.dotmarketing.portlets.contentlet.model.Contentlet;
 import com.dotmarketing.util.Logger;
+import com.google.common.collect.ImmutableSet;
+
 import java.util.List;
 import java.util.Set;
 
@@ -152,7 +154,14 @@ public class VanityUrlServices {
             Set<CachedVanityUrl> hostCachedVanityUrl = vanityURLCache
                     .getCachedVanityUrls(VanityUrlUtil
                             .sanitizeSecondCacheKey(vanity.getSite(), vanity.getLanguageId()));
-            hostCachedVanityUrl.add(new CachedVanityUrl(vanity));
+            
+            
+            hostCachedVanityUrl = ImmutableSet.<CachedVanityUrl>builder()
+                            .add(new CachedVanityUrl(vanity))
+                            .addAll(hostCachedVanityUrl)
+                            .build();
+            
+
 
             vanityURLCache.setCachedVanityUrls(
                     VanityUrlUtil.sanitizeSecondCacheKey(vanity.getSite(), vanity.getLanguageId()),

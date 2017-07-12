@@ -6,6 +6,8 @@ import com.dotmarketing.business.CacheLocator;
 import com.dotmarketing.business.DotCacheAdministrator;
 import com.dotmarketing.business.DotCacheException;
 import com.dotmarketing.util.Logger;
+import com.google.common.collect.ImmutableSet;
+
 import java.util.HashSet;
 import java.util.Set;
 
@@ -107,7 +109,8 @@ public class VanityUrlCacheImpl extends VanityUrlCache {
     @Override
     public void setCachedVanityUrls(final String key,
             final Set<CachedVanityUrl> cachedVanityUrlList) {
-        cache.put( key, cachedVanityUrlList, getCachedVanityUrlGroup());
+        
+        cache.put( key, ImmutableSet.copyOf(cachedVanityUrlList), getCachedVanityUrlGroup());
     }
 
     @Override
